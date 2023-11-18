@@ -380,6 +380,7 @@ int64_t Graph::onnx_ir_version(void)
 #include "nodes/lstm.h"
 #include "nodes/matmul.h"
 #include "nodes/matmulinteger.h"
+#include "nodes/multithreshold.h"
 #include "nodes/maxpool.h"
 #include "nodes/pad.h"
 #include "nodes/range.h"
@@ -488,6 +489,7 @@ Node* Graph::createNode(std::string opName)
 	if( opName == "Unsqueeze" )return new Unsqueeze;
 	if( opName == "Upsample" )return new Upsample;
 	if( opName == "Xor" )return new Elementwise_2("Xor");
+	if( opName == "MultiThreshold" )return new MultiThreshold;
 
 	ERROR("Unimplemented: node operation " << opName);
 	return NULL;
