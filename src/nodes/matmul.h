@@ -92,7 +92,7 @@ class MatMul : public Node {
 		{
 			Tensor *rv = new Tensor;
 
-						// batch
+			// batch
 			rv->data_dim.push_back(1);
 			rv->data_dim.push_back(channels);
 			rv->data_dim.push_back(rows);
