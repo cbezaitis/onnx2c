@@ -27,11 +27,16 @@ class MultiThreshold : public Node {
 	// std::vector<float> a_floatarray_attribute;
 	float out_bias;
 	std::string out_dtype;
+	std::string data_layout = "empty";
 
 	// Mandatory "API" functions towards the rest of onnx2c
 	virtual void parseAttributes( onnx::NodeProto &node ) override;
 	virtual void resolve(void) override;
 	virtual void print(std::ostream &dst) const override;
+	// Extra helper functions
+	virtual void print4D(std::ostream &dst) const;
+	virtual void print4DLayout(std::ostream &dst) const;
+	virtual void print2D(std::ostream &dst) const;
 };
 
 
@@ -44,6 +49,8 @@ void MultiThreshold::parseAttributes( onnx::NodeProto &node )
 			out_bias = parse_attribute_float(a);
 		else if( a.name() == "out_dtype" )
 			out_dtype = parse_attribute_string(a);
+		else if( a.name() == "data_layout" )
+			data_layout = parse_attribute_string(a);
 		else
 			LOG(ERROR) << "Ignoring attribute " << a.name() << " for node MultiThreshold/" << onnx_name << std::endl;
 	}
@@ -70,24 +77,18 @@ void MultiThreshold::resolve(void)
 
 	// Multithreshold should turn this to an integer,
 	// but for simulation purposes this is now a 
-	if ( inputs[0]->data_dim.size() != 4)
-	{
-		ERROR("Not implemented for anything different than 4 dimensions");
-	}
-	
+
 	t->data_type = onnx::TensorProto_DataType_FLOAT;
 	register_output(t, "Y");
 
 	/* TODO: optional outputs? */
 }
 
-
-/* Body of the node implementing function */
-void MultiThreshold::print(std::ostream &dst) const
+void MultiThreshold::print4D(std::ostream &dst) const
 {
 	Tensor *A = inputs[0];
 	Tensor *B = inputs[1];
-	INDT_1 << "/* MultiThreshold */" << std::endl;
+	INDT_1 << "/* MultiThreshold 4D bad layout */" << std::endl;
 	INDT_1 << "/* Print info on this node here, for debugging purposes */" << std::endl;
 	int32_t rows = A->data_dim[2];
 	int32_t cols = A->data_dim[3];
@@ -130,6 +131,102 @@ void MultiThreshold::print(std::ostream &dst) const
 	INDT_4 << "index++;"<< std::endl;
 	INDT_3 << "}"<< std::endl;
 	INDT_1 << "}"<< std::endl;
+}
+
+void MultiThreshold::print4DLayout(std::ostream &dst) const
+{
+	Tensor *A = inputs[0];
+	Tensor *B = inputs[1];
+	INDT_1 << "/* MultiThreshold 4DLayout*/" << std::endl;
+	INDT_1 << "/* Print info on this node here, for debugging purposes */" << std::endl;
+	int32_t rows = A->data_dim[2];
+	int32_t cols = A->data_dim[3];
+	int32_t batch = A->data_dim[0];
+	if (batch != 1)
+	{
+		ERROR("batch not implemented");
+	}
+	int32_t channels = A->data_dim[1];
+	int32_t thresholds = B->data_dim[1];
+	int32_t channelsInput = B->data_dim[0];
+	if ( channelsInput != cols)
+	{
+		ERROR("colums of input should be the same as threshold");
+	}
+	
+	INDT_1 << "/* immediately thresholding */" << std::endl;
+	INDT_1 << "for( uint32_t chan=0; chan<" << channels << "; chan++) " << std::endl;
+	INDT_2 << "for( uint32_t r=0; r<" << rows << "; r++)" << std::endl;
+	INDT_3 << "for( uint32_t c=0; c<" << cols << "; c++) {" << std::endl;
+	INDT_4 << "Y[0][chan][r][c]= 0;" << std::endl;
+	INDT_4 << "for( uint32_t thresh=0; thresh<" << thresholds << "; thresh++)" << std::endl;
+	INDT_5 << "if (A[0][chan][r][c] >= B[c][thresh])"<< std::endl;
+	INDT(6)<< "Y[0][chan][r][c] = Y[0][chan][r][c] + 1;"<< std::endl;
+	INDT_3 << "}"<< std::endl;
+
+	INDT_1 << "\n/* Bias */" << std::endl;
+
+	INDT_1 << "/* immediately thresholding */" << std::endl;
+	INDT_1 << "for( uint32_t chan=0; chan<" << channels << "; chan++) " << std::endl;
+	INDT_2 << "for( uint32_t r=0; r<" << rows << "; r++)" << std::endl;
+	INDT_3 << "for( uint32_t c=0; c<" << cols << "; c++)" << std::endl;
+	INDT_4 << "Y[0][chan][r][c] = Y[0][chan][r][c] + ("<< out_bias<<");"<< std::endl;
+
+}
+
+void MultiThreshold::print2D(std::ostream &dst)  const
+{
+	Tensor *A = inputs[0];
+	Tensor *B = inputs[1];
+	INDT_1 << "/* MultiThreshold 2D */" << std::endl;
+	INDT_1 << "/* Print info on this node here, for debugging purposes */" << std::endl;
+	int32_t pixels = A->data_dim[1];
+	int32_t batch  = A->data_dim[0];
+	if (batch != 1 )
+	{
+		ERROR("not implememented");
+	}
+	int32_t threshold_pixels = B->data_dim[0];
+	int32_t thresholds = B->data_dim[1];
+	if ( threshold_pixels != pixels)
+	{
+		ERROR("input pixels and parameter pixels should be the same");
+	}
+	
+	INDT_1 << "/* Do the actual thresholding */" << std::endl;
+	INDT_1 << "for( uint32_t pixel=0; pixel<" << pixels << "; pixel++)" << std::endl;
+	INDT_2 << "for( uint32_t threshold=0; threshold<" << thresholds << "; threshold++)" << std::endl;
+	INDT_3 << "if(A[0][pixel]>=B[pixel][threshold])" << std::endl;
+	INDT_4 << "Y[0][pixel]++;" << std::endl;
+	INDT_1 << "\n/* Bias*/" << std::endl;
+	INDT_1 << "for( uint32_t pixel=0; pixel<" << pixels << "; pixel++)" << std::endl;
+	INDT_2 << "Y[0][pixel] = Y[0][pixel] + ("<< out_bias<<"); " << std::endl;
+}
+
+/* Body of the node implementing function */
+void MultiThreshold::print(std::ostream &dst) const
+{
+	if (inputs[0]->data_dim.size() == 4 )
+	{
+		LOG(TRACE) << "\n HELPPPPP " << data_layout << std::endl;
+		if (data_layout.compare("NHWC")== 0)
+		{
+			print4DLayout(dst);
+		} else
+		{
+			print4D(dst);
+		}
+		
+		
+	} else if(inputs[0]->data_dim.size() == 2 )
+	{
+		print2D(dst);
+	} else
+	{
+		ERROR("Not implemented for anything different than 4 dimensions");
+	}
+	
+
 
 
 }
