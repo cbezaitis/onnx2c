@@ -125,7 +125,7 @@ void Im2Col::print(std::ostream &dst) const
 	/* Add Stride if needed */
 	INDT_4 << "uint32_t input_column = h_offset + r;" << std::endl;
 	INDT_4 << "uint32_t input_row    = w_offset + c;" << std::endl;
-	INDT_4 << "if (input_channel>"<< input_column<<"||input_channel<0||input_channel>"<< input_channels <<"||input_column<0||input_row>"<< input_rows<< "||input_row<0){" << std::endl;
+	INDT_4 << "if (input_channel>"<< input_column<<"||input_channel<0||input_column>"<< input_channels <<"||input_column<0||input_row>"<< input_rows<< "||input_row<0){" << std::endl;
 	INDT_5 << " after_im_col[chan][index_after] =0.0;" << std::endl;
 	INDT_4 << "}else" << std::endl;
 	INDT_5 << "after_im_col[chan][index_after]=first_transpose[0][input_channel][input_column][input_row];" << std::endl;

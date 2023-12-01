@@ -27,6 +27,7 @@ class MultiThreshold : public Node {
 	// std::vector<float> a_floatarray_attribute;
 	float out_bias;
 	std::string out_dtype;
+	float out_scale = 0.0;
 	std::string data_layout = "empty";
 
 	// Mandatory "API" functions towards the rest of onnx2c
@@ -51,6 +52,8 @@ void MultiThreshold::parseAttributes( onnx::NodeProto &node )
 			out_dtype = parse_attribute_string(a);
 		else if( a.name() == "data_layout" )
 			data_layout = parse_attribute_string(a);
+		else if( a.name() == "out_scale" )
+			out_scale = parse_attribute_float(a);
 		else
 			LOG(ERROR) << "Ignoring attribute " << a.name() << " for node MultiThreshold/" << onnx_name << std::endl;
 	}
@@ -88,8 +91,7 @@ void MultiThreshold::print4D(std::ostream &dst) const
 {
 	Tensor *A = inputs[0];
 	Tensor *B = inputs[1];
-	INDT_1 << "/* MultiThreshold 4D bad layout */" << std::endl;
-	INDT_1 << "/* Print info on this node here, for debugging purposes */" << std::endl;
+	INDT_1 << "/* MultiThreshold 4D Layout need Transpose */" << std::endl;
 	int32_t rows = A->data_dim[2];
 	int32_t cols = A->data_dim[3];
 	// int32_t batch = A->data_dim[0];
@@ -127,7 +129,13 @@ void MultiThreshold::print4D(std::ostream &dst) const
 	INDT_2 << "uint32_t index = 0;" << std::endl;
 	INDT_2 << "for( uint32_t r=0; r<" << rows << "; r++)" << std::endl;
 	INDT_3 << "for( uint32_t c=0; c<" << cols << "; c++) {" << std::endl;
-	INDT_4 << "Y[0][chan][r][c] = reshape_output[chan][index] + ("<< out_bias<<");" << std::endl;
+	if (out_scale != 0)
+	{
+		INDT_4 << "Y[0][chan][r][c] = "<< out_scale << " * reshape_output[chan][index] + ("<< out_bias<<");" << std::endl;
+	} else
+	{
+		INDT_4 << "Y[0][chan][r][c] = reshape_output[chan][index] + ("<< out_bias<<");" << std::endl;
+	}
 	INDT_4 << "index++;"<< std::endl;
 	INDT_3 << "}"<< std::endl;
 	INDT_1 << "}"<< std::endl;
@@ -137,8 +145,7 @@ void MultiThreshold::print4DLayout(std::ostream &dst) const
 {
 	Tensor *A = inputs[0];
 	Tensor *B = inputs[1];
-	INDT_1 << "/* MultiThreshold 4DLayout*/" << std::endl;
-	INDT_1 << "/* Print info on this node here, for debugging purposes */" << std::endl;
+	INDT_1 << "/* MultiThreshold 4D Immedieate Layout*/" << std::endl;
 	int32_t rows = A->data_dim[2];
 	int32_t cols = A->data_dim[3];
 	int32_t batch = A->data_dim[0];
@@ -154,7 +161,7 @@ void MultiThreshold::print4DLayout(std::ostream &dst) const
 		ERROR("colums of input should be the same as threshold");
 	}
 	
-	INDT_1 << "/* immediately thresholding */" << std::endl;
+	INDT_1 << "/* Thresholding */" << std::endl;
 	INDT_1 << "for( uint32_t chan=0; chan<" << channels << "; chan++) " << std::endl;
 	INDT_2 << "for( uint32_t r=0; r<" << rows << "; r++)" << std::endl;
 	INDT_3 << "for( uint32_t c=0; c<" << cols << "; c++) {" << std::endl;
@@ -164,14 +171,20 @@ void MultiThreshold::print4DLayout(std::ostream &dst) const
 	INDT(6)<< "Y[0][chan][r][c] = Y[0][chan][r][c] + 1;"<< std::endl;
 	INDT_3 << "}"<< std::endl;
 
-	INDT_1 << "\n/* Bias */" << std::endl;
+	INDT_1 << "\n/* Scale && Bias */" << std::endl;
 
 	INDT_1 << "/* immediately thresholding */" << std::endl;
 	INDT_1 << "for( uint32_t chan=0; chan<" << channels << "; chan++) " << std::endl;
 	INDT_2 << "for( uint32_t r=0; r<" << rows << "; r++)" << std::endl;
 	INDT_3 << "for( uint32_t c=0; c<" << cols << "; c++)" << std::endl;
 	INDT_4 << "Y[0][chan][r][c] = Y[0][chan][r][c] + ("<< out_bias<<");"<< std::endl;
-
+	if (out_scale != 0)
+	{
+		INDT_4 << "Y[0][chan][r][c] = "<< out_scale << " * Y[0][chan][r][c] + ("<< out_bias<<");"<< std::endl;
+	} else
+	{
+		INDT_4 << "Y[0][chan][r][c] = Y[0][chan][r][c] + ("<< out_bias<<");"<< std::endl;
+	}
 }
 
 void MultiThreshold::print2D(std::ostream &dst)  const
@@ -179,7 +192,6 @@ void MultiThreshold::print2D(std::ostream &dst)  const
 	Tensor *A = inputs[0];
 	Tensor *B = inputs[1];
 	INDT_1 << "/* MultiThreshold 2D */" << std::endl;
-	INDT_1 << "/* Print info on this node here, for debugging purposes */" << std::endl;
 	int32_t pixels = A->data_dim[1];
 	int32_t batch  = A->data_dim[0];
 	if (batch != 1 )
@@ -194,13 +206,22 @@ void MultiThreshold::print2D(std::ostream &dst)  const
 	}
 	
 	INDT_1 << "/* Do the actual thresholding */" << std::endl;
-	INDT_1 << "for( uint32_t pixel=0; pixel<" << pixels << "; pixel++)" << std::endl;
+	INDT_1 << "for( uint32_t pixel=0; pixel<" << pixels << "; pixel++){" << std::endl;
+	INDT_2 << "Y[0][pixel] = 0;" << std::endl;
 	INDT_2 << "for( uint32_t threshold=0; threshold<" << thresholds << "; threshold++)" << std::endl;
 	INDT_3 << "if(A[0][pixel]>=B[pixel][threshold])" << std::endl;
 	INDT_4 << "Y[0][pixel]++;" << std::endl;
-	INDT_1 << "\n/* Bias*/" << std::endl;
+	INDT_1 << "}" << std::endl;
+	INDT_1 << "\n/* Scale && Bias */" << std::endl;
 	INDT_1 << "for( uint32_t pixel=0; pixel<" << pixels << "; pixel++)" << std::endl;
-	INDT_2 << "Y[0][pixel] = Y[0][pixel] + ("<< out_bias<<"); " << std::endl;
+
+	if (out_scale != 0)
+	{
+		INDT_2 << "Y[0][pixel] = " << out_scale << " * Y[0][pixel] + ("<< out_bias<<"); " << std::endl;
+	} else
+	{
+		INDT_2 << "Y[0][pixel] = Y[0][pixel] + ("<< out_bias<<"); " << std::endl;
+	}
 }
 
 /* Body of the node implementing function */
@@ -208,7 +229,7 @@ void MultiThreshold::print(std::ostream &dst) const
 {
 	if (inputs[0]->data_dim.size() == 4 )
 	{
-		LOG(TRACE) << "\n HELPPPPP " << data_layout << std::endl;
+		LOG(TRACE) << "\n data layout on multithreshold is " << data_layout << std::endl;
 		if (data_layout.compare("NHWC")== 0)
 		{
 			print4DLayout(dst);
