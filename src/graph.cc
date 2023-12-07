@@ -396,6 +396,7 @@ int64_t Graph::onnx_ir_version(void)
 #include "nodes/unsqueeze.h"
 #include "nodes/upsample.h"
 #include "nodes/im2col.h"
+#include "nodes/topk.h"
 
 Node* Graph::createNode(std::string opName)
 {
@@ -492,6 +493,7 @@ Node* Graph::createNode(std::string opName)
 	if( opName == "Xor" )return new Elementwise_2("Xor");
 	if( opName == "MultiThreshold" )return new MultiThreshold;
 	if( opName == "Im2Col" )return new Im2Col;
+	if( opName == "TopK" )return new TopK;
 
 	ERROR("Unimplemented: node operation " << opName);
 	return NULL;
