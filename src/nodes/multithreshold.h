@@ -1,18 +1,11 @@
 /* This file is part of onnx2c.
  *
- * TEMPLATE node.
- * When implementing a new node, use this template
- * as a starting point.
- *
- * This file can be kept as a single .h file with an
- * in-header implementation, or it can be split into
- * a .h and a .cc file.
- *
- * Replace all occurances of TEMPLATE in this file.
- * Some representative dummy implementation provided.
- *
- * The functions here are callbacks from the onnx2c
- * framework. See node.h for more documentation.
+ * Custom Operation of QONNX
+ * It is a quantization step based on thresholding 
+ * the input values. 
+ * It only outputs integers representated by float numbers 
+ * for the time being
+ * 
  */
 #include "node.h"
 
@@ -24,7 +17,6 @@ class MultiThreshold : public Node {
 		op_name = "MultiThreshold";
 	}
 	/* Examples of ONNX Operand attributes */
-	// std::vector<float> a_floatarray_attribute;
 	float out_bias;
 	std::string out_dtype;
 	float out_scale = 0.0;
@@ -177,7 +169,6 @@ void MultiThreshold::print4DLayout(std::ostream &dst) const
 	INDT_1 << "for( uint32_t chan=0; chan<" << channels << "; chan++) " << std::endl;
 	INDT_2 << "for( uint32_t r=0; r<" << rows << "; r++)" << std::endl;
 	INDT_3 << "for( uint32_t c=0; c<" << cols << "; c++)" << std::endl;
-	INDT_4 << "Y[0][chan][r][c] = Y[0][chan][r][c] + ("<< out_bias<<");"<< std::endl;
 	if (out_scale != 0)
 	{
 		INDT_4 << "Y[0][chan][r][c] = "<< out_scale << " * Y[0][chan][r][c] + ("<< out_bias<<");"<< std::endl;
@@ -229,7 +220,6 @@ void MultiThreshold::print(std::ostream &dst) const
 {
 	if (inputs[0]->data_dim.size() == 4 )
 	{
-		LOG(TRACE) << "\n data layout on multithreshold is " << data_layout << std::endl;
 		if (data_layout.compare("NHWC")== 0)
 		{
 			print4DLayout(dst);
