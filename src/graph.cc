@@ -397,6 +397,7 @@ int64_t Graph::onnx_ir_version(void)
 #include "nodes/upsample.h"
 #include "nodes/im2col.h"
 #include "nodes/topk.h"
+#include "nodes/quantaveragepool.h"
 
 Node* Graph::createNode(std::string opName)
 {
@@ -494,6 +495,7 @@ Node* Graph::createNode(std::string opName)
 	if( opName == "MultiThreshold" )return new MultiThreshold;
 	if( opName == "Im2Col" )return new Im2Col;
 	if( opName == "TopK" )return new TopK;
+    if( opName == "QuantAvgPool2d" )return new QuantAvgPool2d;
 
 	ERROR("Unimplemented: node operation " << opName);
 	return NULL;
