@@ -29,6 +29,7 @@ class Im2Col : public Node {
 	std::vector<int64_t> kernel_size;
 
 	std::vector<int64_t> stride;
+	std::vector<int64_t> pad_amount;
 
 	// Mandatory "API" functions towards the rest of onnx2c
 	virtual void parseAttributes( onnx::NodeProto &node ) override;
@@ -49,10 +50,17 @@ void Im2Col::parseAttributes( onnx::NodeProto &node )
 		else if( a.name() == "kernel_size" )
 		{
 			kernel_size = parse_attribute_ints(a);
-			LOG(DEBUG) << "kernel_size!!" << kernel_size[0] <<" second kernel" << kernel_size[1] << std::endl;
+		}
+		else if( a.name() == "stride" )
+		{
+			stride  = parse_attribute_ints(a);
+		}
+		else if( a.name() == "pad_amount" )
+		{
+			pad_amount = parse_attribute_ints(a);
 		}
 		else
-			LOG(ERROR) << "Ignoring attribute " << a.name() << " for node Im2Col/" << onnx_name << std::endl;
+			LOG(DEBUG) << "Ignoring attribute " << a.name() << " for node Im2Col/" << onnx_name << std::endl;
 	}
 }
 
@@ -67,10 +75,24 @@ void Im2Col::resolve(void)
 	register_input(input_1, "A");
 
 	if (inputs[0]->data_dim.size() != 4) {
-		ERROR("Not Implemented");
+		ERROR("Not Implemented for different input size");
 	}
 	// else leave input_2_optional as null so other functions here know to ignore it
 
+	if (stride.size() == 0 || pad_amount.size() == 0 || dilations.size() == 0 || kernel_size.size() == 0 ) {
+		ERROR("Not Implemented for input sizes not existent");
+	}
+
+	if (pad_amount[0] != pad_amount[1] || pad_amount[1] != pad_amount[2] || pad_amount[2] != pad_amount[3] || pad_amount[3] != pad_amount[0]   )
+	{
+		ERROR("Not Implemented for different padding");
+	}
+	
+
+	if ( dilations[0] != 1 ||  dilations[1] != 1  )
+	{
+		ERROR("Not Implemented for different dilations");
+	}
 
 	/* Create output tensors.
 	 * Set data dimensions and data type for the created tensors. */
@@ -78,9 +100,9 @@ void Im2Col::resolve(void)
 	// batch
 	t->data_dim.push_back(1);
 	// channel :(ifm_dim + total_pad - dilation * (k - 1) - 1) / stride) + 1
-	t->data_dim.push_back(input_1->data_dim[1] - kernel_size[0] + 1);
+	t->data_dim.push_back((input_1->data_dim[1] + 2*pad_amount[0]  - kernel_size[0])/stride[0] + 1);
 	// rows :(ifm_dim + total_pad - dilation * (k - 1) - 1) / stride) + 1
-	t->data_dim.push_back(input_1->data_dim[2] - kernel_size[1] + 1);
+	t->data_dim.push_back((input_1->data_dim[2] + 2*pad_amount[0] - kernel_size[1])/stride[1] + 1);
 	// collumns : kernel_rows * kernel_height * channels 
 	t->data_dim.push_back(kernel_size[1]*kernel_size[0]*input_1->data_dim[3]);
 	t->data_type = onnx::TensorProto_DataType_FLOAT;
@@ -99,6 +121,8 @@ void Im2Col::print(std::ostream &dst) const
     int32_t input_channels = A->data_dim[1];
 	int32_t input_rows 	   = A->data_dim[2];
 	int32_t input_column  = A->data_dim[3];
+	int32_t pads_h = pad_amount[0] + pad_amount[2];
+	int32_t pads_w = pad_amount[1] + pad_amount[3];
 	INDT_1 << "/* First Transpose */" << std::endl;
 	/* Genereate the C code here */
 	INDT_1 << "float first_transpose[1]["<<input_column << "][" << input_channels<< "]["<< input_rows<< "];" << std::endl;
@@ -111,8 +135,8 @@ void Im2Col::print(std::ostream &dst) const
 	/*  https://github.com/pjreddie/darknet/blob/master/src/im2col.c   */
 	INDT_1 << "\n/* Actual Im2Col */" << std::endl;
 	int32_t col_channels = kernel_size[1]*kernel_size[0]*A->data_dim[3];
-	int32_t col_rows = A->data_dim[1] - kernel_size[0] + 1;
-	int32_t col_columns = A->data_dim[2] - kernel_size[1] + 1; 
+	int32_t col_rows = (A->data_dim[1] + pads_h - kernel_size[0])/stride[0] + 1;
+	int32_t col_columns = (A->data_dim[2] + pads_w - kernel_size[1])/stride[1] + 1; 
 	INDT_1 << "float after_im_col["<<  col_channels << "][" << col_rows*col_columns << "];" << std::endl;
 	
 	INDT_1 << "for( uint32_t chan=0; chan<" << col_channels << "; chan++) {" << std::endl;
@@ -123,9 +147,9 @@ void Im2Col::print(std::ostream &dst) const
 	INDT_2 << "for( uint32_t r=0; r<" << col_rows << "; r++){" << std::endl;
 	INDT_3 << "for( uint32_t c=0; c<" << col_columns << "; c++) {" << std::endl;
 	/* Add Stride if needed */
-	INDT_4 << "uint32_t input_column = h_offset + r;" << std::endl;
-	INDT_4 << "uint32_t input_row    = w_offset + c;" << std::endl;
-	INDT_4 << "if (input_channel>"<< input_column<<"||input_channel<0||input_column>"<< input_channels <<"||input_column<0||input_row>"<< input_rows<< "||input_row<0){" << std::endl;
+	INDT_4 << "uint32_t input_column = h_offset + r * "<< stride[0]  << " - " << pad_amount[0] << ";" << std::endl;
+	INDT_4 << "uint32_t input_row    = w_offset + c * "<< stride[1] << " - " << pad_amount[1] << ";" << std::endl;
+	INDT_4 << "if (input_channel>"<< input_column<<"||input_channel<0||input_column>="<< input_channels <<"||input_column<0||input_row>="<< input_rows<< "||input_row<0){" << std::endl;
 	INDT_5 << " after_im_col[chan][index_after] =0.0;" << std::endl;
 	INDT_4 << "}else" << std::endl;
 	INDT_5 << "after_im_col[chan][index_after]=first_transpose[0][input_channel][input_column][input_row];" << std::endl;
