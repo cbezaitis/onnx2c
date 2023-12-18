@@ -17,7 +17,7 @@ class MultiThreshold : public Node {
 		op_name = "MultiThreshold";
 	}
 	/* Examples of ONNX Operand attributes */
-	float out_bias;
+	float out_bias = 0;
 	std::string out_dtype;
 	float out_scale = 0.0;
 	std::string data_layout = "empty";

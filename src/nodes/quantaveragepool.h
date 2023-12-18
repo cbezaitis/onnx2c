@@ -19,7 +19,6 @@ class QuantAvgPool2d : public Pooling {
 	int64_t ibits = 0;
 	int64_t obits = 0;
 	void parseAttributes( onnx::NodeProto &node ) override {
-		LOG(DEBUG) << "parse first" <<std::endl;
 		for( const auto& a : node.attribute() ) {
 			if( a.name() == "data_layout" )
 				data_layout = parse_attribute_string(a);
